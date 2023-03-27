@@ -36,9 +36,6 @@ def ask_gpt4(input_str, feedback):
         top_p=OPENAI_PARAMS.get("top_p", 1.0),        
     )
     
-
-
-
     return response['choices'][0]['message']['content']
 
 def ask_chatgpt(input_str):
@@ -62,8 +59,8 @@ def load_schema_files(filename="schemas/yelp.schema"):
 
 def create_write_gql_query_prompt():
     template = """
-    Given the GraphQL Schema, respond with a graphql query that can answer the user question: {question}. 
-    Please ensure that the graphql query is valid for the provided schema. If such query does not exist, answer N/A. Don't include any comment.\n
+    Answer the user question: {question} as much as you can. You will write a Graphql query to get intermediate answers, and those will be fed into another large language model to compile the final answer.
+    Please ensure that the graphql query you write is valid for the provided schema. If such query does not exist, answer N/A. Don't include any comment or explanation.\n
 
     GraphQL Schema:
     {schema}
