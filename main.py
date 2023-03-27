@@ -1,6 +1,5 @@
 import openai
-import numpy as np
-import langchain
+import os
 import requests
 from langchain import PromptTemplate
 from requests.exceptions import HTTPError
@@ -11,8 +10,8 @@ from termcolor import colored
 colorama.init()
 
 
-openai.organization = ""
-openai.api_key = ""
+openai.organization = os.getenv('OPENAI_ORG')
+openai.api_key = os.getenv('OPENAI_API_KEY')
 
 OPENAI_PARAMS={
     "temperature": 0,
@@ -56,7 +55,7 @@ def ask_chatgpt(input_str):
 
     return response['choices'][0]['message']['content']
 
-def load_schema_files(filename="yelp.schema"):
+def load_schema_files(filename="schemas/yelp.schema"):
     with open(filename) as f:
         schema = f.read()
     return schema
@@ -88,7 +87,7 @@ def create_tool_choice_prompt():
 
 def create_compile_answer_prompt():
     template = """
-    Given the results {results}, answer the user question: {question} in plain english with a delightful tone, with emojis.
+    Given the results {results}, answer the user question: {question} in plain english with a delightful, helpful tone.
 
     """
     prompt = PromptTemplate(
@@ -98,26 +97,14 @@ def create_compile_answer_prompt():
     return prompt 
 
 
-def execute_graphql_command(endpoint, query, headers):
+def execute_graphql_command(endpoint, data, headers):
     """
     execute a graphql query
     """
-    if endpoint != "https://api.yelp.com/v3/graphql":
-        data = json.dumps({"query": query})
-        try:
-            r = requests.post(endpoint, data=data, headers=headers)
-            # print(r.request.url)
-            # print(r.request.body)
-            # print(r.request.headers)
-        except HTTPError as e:
-            print(e.response.text)
-        
-    else:
-        try:
-            r = requests.post(endpoint, data=query, headers=headers)
-        except HTTPError as e:
-            print(e.response.text)
-
+    try:
+        r = requests.post(endpoint, data=data, headers=headers)
+    except HTTPError as e:
+        print(e.response.text)
     return r
 
      
@@ -134,34 +121,36 @@ def main():
     headers = None 
     print("\n")
     if "yelp" in tool_response.lower():
-        print(colored('Using Yelp GraphQL API', 'light_green', 'on_dark_grey'))
-
-        schema = load_schema_files('yelp.schema')
+        schema = load_schema_files('schemas/yelp.schema')
         endpoint = "https://api.yelp.com/v3/graphql"
         headers={
             "Authorization": f"Bearer 1RosRHvtDF8zosm9SM-xOz8cUCt0YTp_nVPjqSIwy5PBqFPanbLIQoCPdKH8NMbrGflkpGoS4FqMtjHqx1Fz7IpZ6v8ZqZ338lXXbkC27V8wBPUaSHd4E0yD7ZwKWXYx",
             "Content-Type": "application/graphql"
         }
+        tool = "yelp"
 
     elif 'tmdb' in tool_response.lower():
-        print("Using TMDB GraphQL API") 
-        schema = load_schema_files('tmdb.schema')
+       
+        schema = load_schema_files('schemas/tmdb.schema')
         endpoint = "https://tmdb.apps.quintero.io/"
         headers={
             "Content-Type": "application/json",
         }
+        tool = "tmdb"
 
     elif 'pokemon' in tool_response.lower():
-        print(colored('Using Pokemon Trading cards GraphQL API', 'light_green', 'on_dark_grey'))
-        schema = load_schema_files('tcg.schema')
+        schema = load_schema_files('schemas/tcg.schema')
         endpoint = "https://api.tcgdex.net/v2/graphql"
         headers={
             "Content-Type": "application/json",
         }
+        tool = "pokemon"
 
     else:
         print("No available tool for this. ")
         exit(0)
+
+    print(colored(f'Using {tool} GraphQL API', 'light_green', 'on_dark_grey'))
 
     feedback = None
     while True:
@@ -171,8 +160,11 @@ def main():
 
         ## Execute the query
         # print("Executing the query ...")
-
-        response = execute_graphql_command(endpoint=endpoint, query=gql_query_response, headers=headers)
+        
+        data = gql_query_response
+        if tool != "yelp":
+            data = json.dumps({"query": gql_query_response}) 
+        response = execute_graphql_command(endpoint=endpoint, data=data, headers=headers)
 
         print(colored(response.text, 'light_green', 'on_dark_grey'))
 
@@ -203,7 +195,6 @@ if __name__ == '__main__':
         main()
 
 
-    # Execute the query
 
 
 
