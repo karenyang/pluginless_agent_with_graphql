@@ -9,7 +9,7 @@ It can be extended to any public and private GraphQL service with a schema file.
 
 ## Requirement
 ```
-pip install openai langchain termcolor
+pip install openai langchain termcolor colorama
 ```
 
 ## Usage
