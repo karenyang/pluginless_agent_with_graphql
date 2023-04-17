@@ -9,13 +9,12 @@ It can be extended to any public and private GraphQL service with a schema file.
 
 ## Requirement
 ```
-pip install openai langchain termcolor colorama
+pip install openai langchain termcolor colorama chromadb tiktoken
 ```
 
 ```
 source OPENAI_ORG="<your_openai_org>"
 source OPENAI_API_KEY="<your_openai_api_key>"
-
 ```
 
 If you want to try it on another schema, you need to provide a schema file and modify the code to include it.
