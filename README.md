@@ -13,8 +13,8 @@ pip install openai langchain termcolor colorama chromadb tiktoken
 ```
 
 ```
-source OPENAI_ORG="<your_openai_org>"
-source OPENAI_API_KEY="<your_openai_api_key>"
+export OPENAI_ORG="<your_openai_org>"
+export OPENAI_API_KEY="<your_openai_api_key>"
 ```
 
 If you want to try it on another schema, you need to provide a schema file and modify the code to include it.
@@ -24,8 +24,8 @@ If you want to try it on another schema, you need to provide a schema file and m
 ## Usage
 First, create index for the schema to use. We provide a few example schemas in the `schemas` folder.You can specify which file to index. By default, it will create schemas for all of the files in `schemas` folder
 ```
-python create_schema_index.py #this will index all files in schemas/ 
-python create_schema_index.py --file schemas/github.schema # this will index a particular file
+python create_schema_index.py //this will index all files in schemas/ folder
+python create_schema_index.py --file schemas/github.schema  //this will index a particular file
 ``` 
 You can replace github.schema to any schema files. It will be stored to your local `.chromadb/`. 
 

@@ -10,6 +10,11 @@ import json
 import colorama 
 from termcolor import colored
 import tiktoken 
+import logging
+
+logger = logging.getLogger()
+logger.disabled = True
+
 
 colorama.init()
 
@@ -22,7 +27,12 @@ OPENAI_PARAMS={
     "top_p": 1.0,
 }
 
-
+chroma_client = chromadb.Client(
+       Settings(
+            chroma_db_impl="duckdb+parquet",
+            persist_directory=".chromadb/" # Optional, defaults to .chromadb/ in the current directory
+        )
+    )
 
 def ask_gpt4(input_str, feedback):
     messages=[
@@ -63,12 +73,6 @@ def load_schema_files(filename="schemas/yelp.schema"):
     return schema
 
 def load_index(indexname='github-schema-index'):
-    chroma_client = chromadb.Client(
-       Settings(
-            chroma_db_impl="duckdb+parquet",
-            persist_directory=".chromadb/" # Optional, defaults to .chromadb/ in the current directory
-        )
-    )
     index = chroma_client.get_collection(indexname)
     openai_ef = embedding_functions.OpenAIEmbeddingFunction(
                     api_key=os.getenv('OPENAI_API_KEY'),
@@ -162,8 +166,18 @@ def trim_text_for_context_size(text, token_limit=8000):
 
      
 def main():
+    available_collections = chroma_client.list_collections()
+    if len(available_collections) == 0:
+        print("no available collection, please run create_schema_index.py first.")
+        exit(0)
+    print("availabe indexed schemas in vector DB: ", available_collections)
+    
+    # prompt templates
+    # 1. choose a tool to use based on user's question, a tool corresponses to a graphql endpoint
     tool_choice_prompt = create_tool_choice_prompt()
+    # 2. given the question and relevant schema, write a gql query
     write_gql_query_prompt = create_write_gql_query_prompt()
+    # 3. given query results and user question, compile an answer
     compile_answer_prompt = create_compile_answer_prompt()
 
     user_question = input("How can I help you today?\n\n")
@@ -227,8 +241,8 @@ def main():
         print(colored(f"Here is gql query to help answer your question: \n {gql_query_response}", 'light_green', 'on_dark_grey'))
 
         ## Execute the query
-        # print("Executing the query ...")
-        
+        print(colored(f"Executing the query ...", 'light_green', 'on_dark_grey'))
+
         data = gql_query_response
         if tool != "yelp":
             data = json.dumps({"query": gql_query_response}) 
