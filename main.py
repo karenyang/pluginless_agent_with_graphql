@@ -1,3 +1,6 @@
+import chromadb
+from chromadb.config import Settings
+from chromadb.utils import embedding_functions
 import openai
 import os
 import requests
@@ -6,9 +9,9 @@ from requests.exceptions import HTTPError
 import json
 import colorama 
 from termcolor import colored
+import tiktoken 
 
 colorama.init()
-
 
 openai.organization = os.getenv('OPENAI_ORG')
 openai.api_key = os.getenv('OPENAI_API_KEY')
@@ -18,6 +21,8 @@ OPENAI_PARAMS={
     "max_tokens": 1024,
     "top_p": 1.0,
 }
+
+
 
 def ask_gpt4(input_str, feedback):
     messages=[
@@ -57,6 +62,47 @@ def load_schema_files(filename="schemas/yelp.schema"):
         schema = f.read()
     return schema
 
+def load_index(indexname='github-schema-index'):
+    chroma_client = chromadb.Client(
+       Settings(
+            chroma_db_impl="duckdb+parquet",
+            persist_directory=".chromadb/" # Optional, defaults to .chromadb/ in the current directory
+        )
+    )
+    index = chroma_client.get_collection(indexname)
+    openai_ef = embedding_functions.OpenAIEmbeddingFunction(
+                    api_key=os.getenv('OPENAI_API_KEY'),
+                    model_name="text-embedding-ada-002"
+                )
+    index._embedding_function = openai_ef
+    return index
+
+def get_relevant_schema_from_index(index, user_question):
+
+    results = index.query(
+        query_texts=[user_question],
+        n_results=10
+    )
+    current_nodes = results['ids'][0]
+    print(colored(f"DEBUG: find relevant node from user questions {current_nodes}", 'light_green', 'on_dark_grey'))
+    current_documents = results['documents'][0]
+    # now added related field entities for existing results, and append it to the context. 
+    for m in results['metadatas'][0]:
+        fields = m["fields"].split(", ")
+        # print(fields)
+        for node in fields:
+            if node and node not in current_nodes:
+                print(colored(f"DEBUG: added related entities {node}", 'light_green', 'on_dark_grey'))
+                current_nodes.append(node)
+                current_documents += index.get(node)['documents']
+
+    # Still need to make sure the overall context size does not explode after we do this.
+    schema = " ".join(current_documents)
+    schema = trim_text_for_context_size(schema)
+    # print("DEBUG: schema ", schema)
+    return schema
+
+
 def create_write_gql_query_prompt():
     template = """
     Answer the user question: {question} as much as you can. You will write a Graphql query to get intermediate answers, and those will be fed into another large language model to compile the final answer.
@@ -74,7 +120,7 @@ def create_write_gql_query_prompt():
 def create_tool_choice_prompt():
     template = """
     Given the user question: {question}, what tools will be helpful? If you don't konw, answer N/A. 
-    Reply with just one word answer: Yelp, TMDB, Pokemon or N/A. For example: where can I eat? Yelp
+    Reply with just one word answer: Yelp, TMDB, Pokemon, Github, or N/A. For example: where can I eat? Yelp
     """
     prompt = PromptTemplate(
         input_variables=["question"],
@@ -104,6 +150,16 @@ def execute_graphql_command(endpoint, data, headers):
         print(e.response.text)
     return r
 
+def trim_text_for_context_size(text, token_limit=8000):
+    encoding = tiktoken.encoding_for_model("text-embedding-ada-002")
+    text_token_size = len(encoding.encode(text))
+    while text_token_size > token_limit:
+        delta = text_token_size - token_limit
+        num_chars_to_remove = delta // 4 + 1
+        text = text[:-num_chars_to_remove]
+        text_token_size = len(text)
+    return text
+
      
 def main():
     tool_choice_prompt = create_tool_choice_prompt()
@@ -117,8 +173,19 @@ def main():
     endpoint = None 
     headers = None 
     print("\n")
-    if "yelp" in tool_response.lower():
-        schema = load_schema_files('schemas/yelp.schema')
+    if "github" in tool_response.lower():
+        index = load_index("github-schema-index")
+        schema = get_relevant_schema_from_index(index, user_question)
+        endpoint = "https://api.github.com/graphql"
+        headers = {
+            "Authorization": "bearer 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"
+        }
+        tool = "github"
+        
+    elif "yelp" in tool_response.lower():
+        # schema = load_schema_files('schemas/yelp.schema')
+        index = load_index("yelp-schema-index")
+        schema = get_relevant_schema_from_index(index, user_question)
         endpoint = "https://api.yelp.com/v3/graphql"
         headers={
             "Authorization": f"Bearer 1RosRHvtDF8zosm9SM-xOz8cUCt0YTp_nVPjqSIwy5PBqFPanbLIQoCPdKH8NMbrGflkpGoS4FqMtjHqx1Fz7IpZ6v8ZqZ338lXXbkC27V8wBPUaSHd4E0yD7ZwKWXYx",
@@ -127,8 +194,9 @@ def main():
         tool = "yelp"
 
     elif 'tmdb' in tool_response.lower():
-       
-        schema = load_schema_files('schemas/tmdb.schema')
+        index = load_index("tmdb-schema-index")
+        schema = get_relevant_schema_from_index(index, user_question)
+        # schema = load_schema_files('schemas/tmdb.schema')
         endpoint = "https://tmdb.apps.quintero.io/"
         headers={
             "Content-Type": "application/json",
@@ -136,7 +204,9 @@ def main():
         tool = "tmdb"
 
     elif 'pokemon' in tool_response.lower():
-        schema = load_schema_files('schemas/tcg.schema')
+        # schema = load_schema_files('schemas/tcg.schema')
+        index = load_index("tcg-schema-index")
+        schema = get_relevant_schema_from_index(index, user_question)
         endpoint = "https://api.tcgdex.net/v2/graphql"
         headers={
             "Content-Type": "application/json",
@@ -149,6 +219,7 @@ def main():
 
     print(colored(f'Using {tool} GraphQL API', 'light_green', 'on_dark_grey'))
 
+    
     feedback = None
     while True:
         response_history = ""
@@ -176,13 +247,15 @@ def main():
                 {"role": "user", "content": f"previous answer: {response.text}, Feedback: {error_feedback}"},
             ]
             continue
-        user_feedback = input("Does this answer look right? Hit enter if Yes. If not, please provide feedback.\n")
+        user_feedback = input("Does this answer look right? Hit enter if Yes. If not, please provide feedback, or type 'quit' to restart a new conversation.\n")
         if len(user_feedback) > 4:
             feedback = [
                 {"role": "assistant", "content": gql_query_response},
                 {"role": "user", "content": user_feedback},
             ]
             user_question += user_feedback
+        elif user_feedback.lower() == "quit":
+            break
         else:
             print("I'm glad you are happy with the answer!\n")
             break
