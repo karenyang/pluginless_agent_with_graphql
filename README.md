@@ -1,5 +1,8 @@
 ## Description
 
+![Query building]("https://user-images.githubusercontent.com/10900474/232677841-30794237-7295-4a10-b627-e9d9c682d27d.png")
+![Final answer]("https://user-images.githubusercontent.com/10900474/232677862-0000da7e-b124-48a2-835d-edb4f414eedc.png")
+
 Access services with a public GraphQL API, GPT plugin style, but without writing any plugin code.
 Currently supported schema: Github, Yelp, TMDB (movie database), and Pokemon Trading cards. 
 
@@ -15,6 +18,7 @@ pip install openai langchain termcolor colorama chromadb tiktoken
 ```
 export OPENAI_ORG="<your_openai_org>"
 export OPENAI_API_KEY="<your_openai_api_key>"
+export GITHUB_PERSONAL_TOKEN="<your_github_personal_token>" //if you want to use the github query, you will need to provide your own token
 ```
 
 If you want to try it on another schema, you need to provide a schema file and modify the code to include it.

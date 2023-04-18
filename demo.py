@@ -109,7 +109,7 @@ def get_relevant_schema_from_index(index, user_question):
 
 def create_write_gql_query_prompt():
     template = """
-    Answer the user question: {question} with a value graphql query. The results of the query is used to get intermediate answers, and those will be fed into another large language model to compile the final answer.
+    Write a graphql query to answer the user question: {question}. The results of the query are fed into another large language model to compile the final answer.
     Please ensure that the graphql query you write is valid for the provided schema. If such query does not exist, answer N/A. Don't include any comment or explanation or dictionary format.\n
 
     GraphQL Schema:
@@ -191,7 +191,7 @@ def main():
         schema = get_relevant_schema_from_index(index, user_question)
         endpoint = "https://api.github.com/graphql"
         headers = {
-            "Authorization": "bearer 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"
+            "Authorization": f"bearer {os.getenv('GITHUB_PERSONAL_TOKEN')}"
         }
         tool = "github"
         
@@ -237,7 +237,7 @@ def main():
     while True:
         response_history = ""
         gql_query_response = ask_gpt4(write_gql_query_prompt.format(question=user_question, schema=schema), feedback=feedback)
-        print(colored(f"Querytray: \n {gql_query_response}", 'light_green', 'on_dark_grey'))
+        print(colored(f"Query: \n {gql_query_response}", 'light_green', 'on_dark_grey'))
 
         ## Execute the query
         print(colored(f"Executing the query ...", 'light_green', 'on_dark_grey'))
