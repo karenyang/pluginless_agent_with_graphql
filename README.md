@@ -1,7 +1,7 @@
 ## Description
 
-![Query building]("https://user-images.githubusercontent.com/10900474/232677841-30794237-7295-4a10-b627-e9d9c682d27d.png")
-![Final answer]("https://user-images.githubusercontent.com/10900474/232677862-0000da7e-b124-48a2-835d-edb4f414eedc.png")
+![Query building](https://user-images.githubusercontent.com/10900474/232677841-30794237-7295-4a10-b627-e9d9c682d27d.png)
+![Final answer](https://user-images.githubusercontent.com/10900474/232677862-0000da7e-b124-48a2-835d-edb4f414eedc.png)
 
 Access services with a public GraphQL API, GPT plugin style, but without writing any plugin code.
 Currently supported schema: Github, Yelp, TMDB (movie database), and Pokemon Trading cards. 
