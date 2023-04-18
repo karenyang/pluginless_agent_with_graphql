@@ -12,8 +12,8 @@ from termcolor import colored
 import tiktoken 
 import logging
 
-logger = logging.getLogger()
-logger.disabled = True
+logging.disable(logging.CRITICAL)
+
 
 
 colorama.init()
@@ -88,7 +88,8 @@ def get_relevant_schema_from_index(index, user_question):
         n_results=10
     )
     current_nodes = results['ids'][0]
-    print(colored(f"DEBUG: find relevant node from user questions {current_nodes}", 'light_green', 'on_dark_grey'))
+    num_original_nodes = len(current_nodes)
+    print(colored(f"DEBUG: find relevant nodes from user questions {current_nodes}", 'light_green', 'on_dark_grey'))
     current_documents = results['documents'][0]
     # now added related field entities for existing results, and append it to the context. 
     for m in results['metadatas'][0]:
@@ -96,10 +97,9 @@ def get_relevant_schema_from_index(index, user_question):
         # print(fields)
         for node in fields:
             if node and node not in current_nodes:
-                print(colored(f"DEBUG: added related entities {node}", 'light_green', 'on_dark_grey'))
                 current_nodes.append(node)
                 current_documents += index.get(node)['documents']
-
+    print(colored(f"DEBUG: added related entities {current_nodes[num_original_nodes:]}", 'light_green', 'on_dark_grey'))
     # Still need to make sure the overall context size does not explode after we do this.
     schema = " ".join(current_documents)
     schema = trim_text_for_context_size(schema)
@@ -109,8 +109,8 @@ def get_relevant_schema_from_index(index, user_question):
 
 def create_write_gql_query_prompt():
     template = """
-    Answer the user question: {question} as much as you can. You will write a Graphql query to get intermediate answers, and those will be fed into another large language model to compile the final answer.
-    Please ensure that the graphql query you write is valid for the provided schema. If such query does not exist, answer N/A. Don't include any comment or explanation.\n
+    Answer the user question: {question} with a value graphql query. The results of the query is used to get intermediate answers, and those will be fed into another large language model to compile the final answer.
+    Please ensure that the graphql query you write is valid for the provided schema. If such query does not exist, answer N/A. Don't include any comment or explanation or dictionary format.\n
 
     GraphQL Schema:
     {schema}
@@ -154,7 +154,7 @@ def execute_graphql_command(endpoint, data, headers):
         print(e.response.text)
     return r
 
-def trim_text_for_context_size(text, token_limit=8000):
+def trim_text_for_context_size(text, token_limit=7000):
     encoding = tiktoken.encoding_for_model("text-embedding-ada-002")
     text_token_size = len(encoding.encode(text))
     while text_token_size > token_limit:
@@ -170,8 +170,7 @@ def main():
     if len(available_collections) == 0:
         print("no available collection, please run create_schema_index.py first.")
         exit(0)
-    print("availabe indexed schemas in vector DB: ", available_collections)
-    
+    print(colored(f"availabe indexed schemas in vector DB: {available_collections}", 'light_green', 'on_dark_grey'))
     # prompt templates
     # 1. choose a tool to use based on user's question, a tool corresponses to a graphql endpoint
     tool_choice_prompt = create_tool_choice_prompt()
@@ -192,7 +191,7 @@ def main():
         schema = get_relevant_schema_from_index(index, user_question)
         endpoint = "https://api.github.com/graphql"
         headers = {
-            "Authorization": "bearer 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"
+            "Authorization": "bearer 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"
         }
         tool = "github"
         
@@ -238,7 +237,7 @@ def main():
     while True:
         response_history = ""
         gql_query_response = ask_gpt4(write_gql_query_prompt.format(question=user_question, schema=schema), feedback=feedback)
-        print(colored(f"Here is gql query to help answer your question: \n {gql_query_response}", 'light_green', 'on_dark_grey'))
+        print(colored(f"Querytray: \n {gql_query_response}", 'light_green', 'on_dark_grey'))
 
         ## Execute the query
         print(colored(f"Executing the query ...", 'light_green', 'on_dark_grey'))
@@ -255,7 +254,9 @@ def main():
             final_answer = ask_chatgpt(compile_answer_prompt.format( question=user_question, results=response_history))
             print(f"\nAnswer:{final_answer}\n")
         else:
-            error_feedback =  input("Retrying the query again, can you provide some feedback?\n")
+            error_feedback =  input("Retrying the query again, can you provide some feedback? Or type 'quit' to restart a new conversation.\n")
+            if error_feedback.lower() == "quit":
+                break
             feedback = [
                 {"role": "assistant", "content": gql_query_response},
                 {"role": "user", "content": f"previous answer: {response.text}, Feedback: {error_feedback}"},
